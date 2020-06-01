@@ -1,0 +1,47 @@
+apiVersion: "istio.openshift.com/v1alpha1"
+kind: "Installation"
+metadata:
+  name: "istio-installation"
+spec:
+  deployment_type: openshift
+  istio:
+    authentication: true
+    community: false
+    prefix: xhuaustc/
+    version: 0.7.0
+  jaeger:
+    prefix: xhuaustc/
+    version: 1.9.0
+    elasticsearch_memory: 1Gi
+  kiali:
+    username: admin
+    password: admin 
+    prefix: xhuaustc/
+    version: 0.13.0
+  launcher:
+    openshift:
+      user: admin
+      password: admin
+    github:
+      username: shake
+      token: 246f1cefcd1289439be668f90af0bf66d35a4c84
+    catalog:
+      filter: booster.mission.metadata.istio
+      branch: v71
+      repo: https://github.com/fabric8-launcher/launcher-booster-catalog.git
+  threeScale:
+    enabled: false
+    prefix: xhuaustc/
+    version: v0.2.0
+    adapter:
+      listenAddr: 3333
+      logLevel: info
+      logJSON: true
+      reportMetrics: true
+      metricsPort: 8080
+      cacheTTLSeconds: 300
+      cacheRefreshSeconds: 180
+      cacheEntriesMax: 1000
+      cacheRefreshRetries: 1
+      allowInsecureConn: false
+      clientTimeoutSeconds: 10

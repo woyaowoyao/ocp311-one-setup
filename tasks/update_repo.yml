@@ -1,0 +1,10 @@
+---
+- name: backup repos
+  shell: "cd /etc/yum.repos.d/; mkdir -p back; mv -f *.repo back/; cd -"
+  ignore_errors: True
+
+- name: copy all.repo
+  copy: src=files/all.repo dest=/etc/yum.repos.d/all.repo
+
+- name: update yum cache
+  shell: "yum clean all"

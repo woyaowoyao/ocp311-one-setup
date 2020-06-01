@@ -1,0 +1,15 @@
+---
+CHANGEREPO: true
+HOSTNAME: os311.test.it.example.com
+
+Change_Base_Registry: false
+Harbor_Url: harbor.apps.it.example.com
+
+FULL_INSTALL: false
+SAMPLE_TEMPLATES: true
+
+CICD_INSTALL: false
+
+# GOGS_USER: root
+GOGS_PASSWORD: 123456
+GOGS_EMAIL: abc@123.com

@@ -1,0 +1,37 @@
+---
+- name: Install Ansible Wget vim
+  yum: name={{item}} state=present
+  with_items:
+    - vim
+    - wget
+    - git
+    - java-1.8.0-openjdk-headless
+    - httpd-tools
+    - python-passlib
+    - mariadb
+    - dnsmasq
+
+- name: set dbus dnsmasq config
+  shell: sed -i "s/deny/allow/g" /etc/dbus-1/system.d/dnsmasq.conf && systemctl daemon-reload
+  notify:
+    - restart dbus
+
+- name: Set tmp/htpasswd
+  shell: "htpasswd -bc /tmp/htpasswd admin admin"
+
+- name: Set playbook Repo disalbed
+  shell: "sed -i 's/enabled=1/enabled=0/g' ./openshift-ansible-playbook/roles/openshift_repos/templates/CentOS-OpenShift-Origin.repo.j2"
+  when: CHANGEREPO
+
+- name: copy ansible hosts
+  template: src='./templates/openshift_hosts.j2' dest='/etc/ansible/hosts'
+
+- name: change web console image base
+  shell: "sed -i 's/docker.io/{{Harbor_Url}}/g' ./openshift-ansible-playbook/roles/openshift_web_console/defaults/main.yml"
+  when: Change_Base_Registry
+
+- name: create dir /etc/origin/master/ if not exists
+  file: path=/etc/origin/master/ state=directory
+
+- name: create file /etc/origin/master/htpasswd if not exists
+  file: path=/etc/origin/master/htpasswd state=touch

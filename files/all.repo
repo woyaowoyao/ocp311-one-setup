@@ -1,0 +1,24 @@
+[base]
+name=CentOS-$releasever - Base
+baseurl=http://mirrors.ustc.edu.cn/centos/$releasever/os/$basearch/
+gpgcheck=0
+
+[updates]
+name=CentOS-$releasever - Updates
+baseurl=http://mirrors.ustc.edu.cn/centos/$releasever/updates/$basearch/
+gpgcheck=0
+
+[extras]
+name=CentOS-$releasever - Extras
+baseurl=http://mirrors.ustc.edu.cn/centos/$releasever/extras/$basearch/
+gpgcheck=0
+
+[openshift]
+name=Openshift
+baseurl=http://mirrors.ustc.edu.cn/centos/$releasever/paas/$basearch/openshift-origin311/
+gpgcheck=0
+
+[epel]
+name=Centos EPEL
+baseurl=http://mirrors.ustc.edu.cn/epel/7/x86_64/
+gpgcheck=0

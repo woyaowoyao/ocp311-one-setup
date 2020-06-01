@@ -1,0 +1,56 @@
+---
+- name: Replace resolv.conf
+  template: src='./templates/resolv.conf.j2' dest='/etc/resolv.conf'
+  
+- name: init openshift cicd
+  script: ./files/init_openshift.sh
+
+- name: cicd install
+  script: ./files/init_cicd.sh {{HOSTNAME}}
+  when: CICD_INSTALL
+  ignore_errors: true
+
+- name: check gogs hostname line
+  lineinfile: 
+    dest: /etc/hosts
+    line: "{{ansible_default_ipv4.address}}  {{ item }}.apps.{{ HOSTNAME }}"
+  with_items:
+    - gogs-cicd
+    - jenkins-cicd
+    - sonarqube-cicd
+    - nexus3-cicd
+    - jenkins-jeesite
+    - jeesite-jeesite
+  notify:
+    - restart dnsmasq
+  when: CICD_INSTALL
+
+- name: wating for gogs up
+  shell: oc get pod -n cicd | grep gogs | grep -v deploy | grep 1/1|wc -l
+  register: cicd_ready_result
+  until: cicd_ready_result.stdout.find("2") != -1
+  retries: 60
+  delay: 10
+  when: CICD_INSTALL
+
+- name: create default user for gogs
+  shell: oc project cicd && gogspodname=$(oc get pod | grep gogs | grep -v postgresql| awk '{print $1}') && oc rsh $gogspodname /opt/gogs/gogs admin create-user --name=root --password={{GOGS_PASSWORD}} --admin=true --email={{GOGS_EMAIL}} --config=/etc/gogs/conf/app.ini
+  ignore_errors: true
+  when: CICD_INSTALL
+
+- name: init gogs jeesite  repo and init jeesite build and pipeline
+  script: ./files/init_jeesite.sh root {{GOGS_PASSWORD}} {{HOSTNAME}}
+  when: CICD_INSTALL
+  ignore_errors: true
+
+- name: waiting for mysql up
+  shell: oc get pod -n jeesite|grep -v deploy | grep 1/1 | grep mysql| wc -l
+  register: mysql_result
+  until: mysql_result.stdout.find("1") != -1
+  retries: 60
+  delay: 10
+  when: CICD_INSTALL
+
+- name: init jeesite data
+  shell: table_count=$(mysql -hmysql.jeesite.svc -ujeesite -pjeesite jeesite -e "show tables;" | wc -l); if [ "$table_count" == "0" ]; then mysql -hmysql.jeesite.svc -ujeesite -pjeesite jeesite < jeesite/db/jeesite_mysql.sql; fi
+  when: CICD_INSTALL

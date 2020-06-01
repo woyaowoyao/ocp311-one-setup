@@ -1,0 +1,149 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+message: |-
+  OpenLDAP服务将会根据指定的参数创建
+metadata:
+  annotations:
+    iconClass: icon-openldap 
+    description: |-
+      OpenLDAP服务将会根据指定的参数创建
+  name: openldap
+  openshift.io/display-name: OpenLDAP
+  openshift.io/documentation-url: https://www.openldap.org/
+  openshift.io/provider-display-name: Red Hat, Inc.
+  tags: database,mysql,pipelines
+objects:
+- apiVersion: apps.openshift.io/v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: openldap
+    name: openldap
+  spec:
+    replicas: 1
+    selector:
+      app: openldap
+      deploymentconfig: openldap
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: openldap
+          deploymentconfig: openldap
+      spec:
+        containers:
+        - env:
+          - name: OPENLDAP_ROOT_DN_SUFFIX
+            valueFrom:
+              secretKeyRef:
+                key: OPENLDAP_ROOT_DN_SUFFIX
+                name: openldap
+          - name: OPENLDAP_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: OPENLDAP_ROOT_PASSWORD
+                name: openldap
+          - name: OPENLDAP_ROOT_DN_PREFIX
+            valueFrom:
+              secretKeyRef:
+                key: OPENLDAP_ROOT_DN_PREFIX
+                name: openldap
+          - name: OPENLDAP_DEBUG_LEVEL
+            valueFrom:
+              secretKeyRef:
+                key: OPENLDAP_DEBUG_LEVEL
+                name: openldap
+          image: xhuaustc/openldap-2441-centos7:latest
+          imagePullPolicy: IfNotPresent
+          name: openldap
+          ports:
+          - containerPort: 389
+            protocol: TCP
+          - containerPort: 636
+            protocol: TCP
+          volumeMounts:
+          - mountPath: /etc/openldap
+            name: openldap-volume-1
+          - mountPath: /var/lib/ldap
+            name: openldap-volume-2
+        restartPolicy: Always
+        serviceAccount: cicd
+        volumes:
+        - persistentVolumeClaim:
+            claimName: openldap-volume-1
+          name: openldap-volume-1
+        - persistentVolumeClaim:
+            claimName: openldap-volume-2
+          name: openldap-volume-2
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: openldap
+    name: openldap
+  spec:
+    ports:
+    - name: 389-tcp
+      port: 389
+      protocol: TCP
+      targetPort: 389
+    - name: 636-tcp
+      port: 636
+      protocol: TCP
+      targetPort: 636
+    selector:
+      app: openldap
+      deploymentconfig: openldap
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  stringData:
+    OPENLDAP_ROOT_DN_SUFFIX: ${OPENLDAP_ROOT_DN_SUFFIX}
+    OPENLDAP_ROOT_DN_PREFIX: ${OPENLDAP_ROOT_DN_PREFIX}
+    OPENLDAP_ROOT_PASSWORD: ${OPENLDAP_ROOT_PASSWORD}
+    OPENLDAP_DEBUG_LEVEL: ${OPENLDAP_DEBUG_LEVEL}
+  kind: Secret
+  metadata:
+    name: openldap
+  type: Opaque
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: openldap-volume-1
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: '1Gi'
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: openldap-volume-2
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: '1Gi'
+parameters:
+- description: Openldap Root DN Suffix
+  displayName: Openldap Root DN Suffix
+  name: OPENLDAP_ROOT_DN_SUFFIX
+  value: dc=example,dc=com
+- description: Openldap Root DN Manager Prefix
+  displayName: Openldap Root DN Manager Prefix
+  name: OPENLDAP_ROOT_DN_PREFIX
+  value: cn=Manager
+- description: Openldap Root Password
+  displayName: Openldap Root Password
+  name: OPENLDAP_ROOT_PASSWORD
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+- description: Openldap Debug Level
+  displayName: Openldap Debug Level
+  name: OPENLDAP_DEBUG_LEVEL
+  value: "256"

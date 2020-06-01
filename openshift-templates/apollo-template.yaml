@@ -1,0 +1,327 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: apollo
+  annotations:
+    description: Apollo（阿波罗）是携程框架部门研发的分布式配置中心，能够集中化管理应用不同环境、不同集群的配置，配置修改后能够实时推送到应用端，并且具备规范的权限、流程治理等特性，适用于微服务配置管理场景。
+    tags: pipelines
+    iconClass: icon-apollo
+objects:
+- apiVersion: v1
+  kind: Secret
+  metadata:
+    annotations:
+      template.openshift.io/expose-database_name: '{.data[''database-name'']}'
+      template.openshift.io/expose-password: '{.data[''database-password'']}'
+      template.openshift.io/expose-root_password: '{.data[''database-root-password'']}'
+      template.openshift.io/expose-username: '{.data[''database-user'']}'
+    name: apollo-mysql
+  stringData:
+    database-password: ${MYSQL_PASSWORD}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      template.openshift.io/expose-uri: mysql://{.spec.clusterIP}:{.spec.ports[?(.name=="mysql")].port}
+    name: apollo-mysql
+  spec:
+    ports:
+    - name: mysql
+      port: 3306
+    selector:
+      name: apollo-mysql
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: apollo-mysql
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: 10Gi
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    name: apollo-mysql
+    labels:
+      app: apollo
+  spec:
+    replicas: 1
+    selector:
+      name: apollo-mysql
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        labels:
+          name: apollo-mysql
+      spec:
+        containers:
+        - env:
+          - name: MYSQL_USER
+            value: apollo
+          - name: MYSQL_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-password
+                name: apollo-mysql
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-password
+                name: apollo-mysql
+          - name: MYSQL_DATABASE
+            value: ApolloConfigDB
+          command:
+          - /bin/sh
+          - '-c'
+          - >-
+            mkdir mysql-init; curl -o mysql-init/init-apollo-db.sh
+            https://gitee.com/xhua/OpenshiftOneClick/raw/3.11/files/apollo/init-apollo-db.sh;
+            container-entrypoint run-mysqld
+          image: centos/mysql-57-centos7:latest
+          imagePullPolicy: IfNotPresent
+          initContainers:
+              name: init-scheduler
+              image: busybox
+              command: ['sh', '-c', 'until nslookup apollo-mysql; do echo waiting for apollo mysql; sleep 2; done;']
+              restartPolicy: Always
+          livenessProbe:
+            initialDelaySeconds: 30
+            tcpSocket:
+              port: 3306
+            timeoutSeconds: 1
+          name: mysql
+          ports:
+          - containerPort: 3306
+          readinessProbe:
+            exec:
+              command:
+              - /bin/sh
+              - -i
+              - -c
+              - MYSQL_PWD="$MYSQL_PASSWORD" mysql -h 127.0.0.1 -u $MYSQL_USER -D $MYSQL_DATABASE
+                -e 'SELECT 1'
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+          volumeMounts:
+          - mountPath: /var/lib/mysql/data
+            name: apollo-mysql-data
+        volumes:
+        - name: apollo-mysql-data
+          persistentVolumeClaim:
+            claimName: apollo-mysql
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: apollo
+    name: apolloconfigadmin
+  spec:
+    replicas: 1
+    selector:
+      app: apolloconfigadmin
+      deploymentconfig: apolloconfigadmin
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: apolloconfigadmin
+          deploymentconfig: apolloconfigadmin
+      spec:
+        serviceAccount: cicd
+        containers:
+        - env:
+          - name: CONFIGSERVICE_REGISTRY_TO_EUREKA_URL_OR_IP
+            value: apollo-admin.cicd.svc
+          - name: CONFIGSERVICE_REGISTRY_TO_EUREKA_PORT
+            value: "8080"
+          - name: CONFIGSERVICEDB
+            value: apollo-mysql.cicd.svc
+          - name: CONFIGSERVICEDB_PORT
+            value: "3306"
+          - name: CONFIGSERVICEDB_USER
+            value: apollo
+          - name: CONFIGSERVICEDB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-password
+                name: apollo-mysql
+          - name: ADMINSERVICE_REGISTRY_TO_EUREKA_URL_OR_IP
+            value: apollo-admin.cicd.svc
+          - name: ADMINSERVICE_REGISTRY_TO_EUREKA_PORT
+            value: "8090"
+          - name: ADMINSERVICEDB
+            value: apollo-mysql.cicd.svc
+          - name: ADMINSERVICEDB_PORT
+            value: "3306"
+          - name: ADMINSERVICEDB_USER
+            value: apollo
+          - name: ADMINSERVICEDB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-password
+                name: apollo-mysql
+          - name: JAVA_OPTS
+            value: -Xms2048M -Xmx3072M
+          image: docker.io/xhuaustc/apolloconfigadmin:latest
+          imagePullPolicy: IfNotPresent
+          initContainers:
+              name: init-scheduler
+              image: busybox
+              command: ['sh', '-c', 'until nslookup apollo-mysql; do echo waiting for apollo mysql; sleep 2; done;']
+              restartPolicy: Always
+          livenessProbe:
+            httpGet:
+              path: /info
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 200
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: apolloconfigadmin
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          - containerPort: 8090
+            protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /info
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: apollo
+    name: apolloportal
+  spec:
+    replicas: 1
+    selector:
+      app: apolloportal
+      deploymentconfig: apolloportal
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: apolloportal
+          deploymentconfig: apolloportal
+      spec:
+        serviceAccount: cicd
+        containers:
+        - env:
+          - name: PORTALDB
+            value: apollo-mysql.cicd.svc
+          - name: PORTALDB_PORT
+            value: "3306"
+          - name: PORTALDB_USER
+            value: apollo
+          - name: PORTALDB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: database-password
+                name: apollo-mysql
+          - name: PRO_METASERVER
+            value: http://apollo-admin.cicd.svc:8080
+          - name: JAVA_OPTS
+            value: -Xms1024M -Xmx3072M
+          image: docker.io/xhuaustc/apolloportal:latest
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /info
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 200
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+          name: apolloportal
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /info
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 1
+    triggers:
+    - type: ConfigChange
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: apolloconfigadmin
+    name: apollo-admin
+  spec:
+    ports:
+    - name: 8090-tcp
+      port: 8090
+      protocol: TCP
+      targetPort: 8090
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      app: apolloconfigadmin
+      deploymentconfig: apolloconfigadmin
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: apollo
+    name: apolloportal
+  spec:
+    ports:
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    selector:
+      deploymentconfig: apolloportal
+    sessionAffinity: None
+    type: ClusterIP
+- apiVersion: v1
+  kind: Route
+  metadata:
+    labels:
+      app: apollo
+      deploymentconfig: apollo-portal
+    name: apollo
+  spec:
+    port:
+      targetPort: 8080-tcp
+    to:
+      kind: Service
+      name: apolloportal
+      weight: 100
+    wildcardPolicy: None
+parameters:
+- description: Password for the MySQL connection user.
+  displayName: MySQL Connection Password
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+  name: MYSQL_PASSWORD
+  required: true

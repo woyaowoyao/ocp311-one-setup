@@ -1,0 +1,32 @@
+---
+- name: change hostname
+  hostname: name={{HOSTNAME}}
+
+- name: add ip hostname to /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    line: "{{ansible_default_ipv4.address}} {{HOSTNAME}}"
+
+- name: Disable selinux
+  selinux: state=disabled
+
+- name: Stop Firewalld
+  service: name=firewalld state=stopped enabled=false
+  ignore_errors: True
+
+- name: create dir .ssh
+  file: path=/root/.ssh state=directory
+
+- name: create file /root/.ssh/authorized_keys
+  shell: touch /root/.ssh/authorized_keys
+
+- name: Copy private key
+  copy:
+    src: files/id_rsa
+    dest: /root/.ssh/id_rsa
+    mode: 0600
+
+- name: Add public key to
+  lineinfile:
+    path: /root/.ssh/authorized_keys
+    line: "ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAmJT/VI04LrXSxRDXOfP7TQ1cCqrmOF3r5rbBY/+UjPH0GFxP3E/fu8ic6+lSjeBPRXttY08mWZDTrict6LUKynbtm9W/VOWgc7eY2Lq/dQrYnB3+LFEhe/f6FdBG6kTdyswP8dwv/W1wbDMm7CyxFCHCgrZthsgpdA7UdaSOsbe+fmD44VFbzFhjmI/A6LKT2+plXaZld8KbjZ0GLsO2pzAODgbWH1mIf6NpaOe8LPnpq4+Cllnd56krPS5Ye6LTL4jb6P4+2XXHrkOebrcl3jhVU2UAQVQFypgMdfmvkSgMkt0ccXMfXI5lfV3/K8iTKar0XQflXGXcxI7TLrDURw=="

@@ -1,0 +1,17 @@
+#- name: Ensure export directories exist
+#  file:
+#    path: "/exports/pv-share"
+#    state: directory
+#    mode: 0777
+#    owner: nfsnobody
+#    group: nfsnobody
+#  
+#- name: set exports
+#  template: src='./templates/nfs_exports.j2' dest='/etc/exports.d/openshift-pvs.exports'
+#  notify:
+#    - restart nfs-server
+- name: init nfs deployment file
+  template: src='./templates/nfs_deployment.yaml.j2' dest='./files/nfs-provisoner/deployment.yaml'
+
+- name: create nfs provisoner
+  script: ./files/install_nfs_provisoner.sh

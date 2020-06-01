@@ -1,0 +1,35 @@
+apiVersion: apps.openshift.io/v1
+kind: DeploymentConfig
+metadata:
+  labels:
+    app: jeesite
+  name: jeesite
+spec:
+  replicas: 1
+  selector:
+    app: jeesite
+    deploymentconfig: jeesite
+  strategy:
+    type: Rolling
+  template:
+    metadata:
+      labels:
+        app: jeesite
+        deploymentconfig: jeesite
+    spec:
+      serviceAccount: jeesite
+      containers:
+        - image: ''
+          imagePullPolicy: Always
+          name: jeesite
+  test: false
+  triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+          - jeesite
+        from:
+          kind: ImageStreamTag
+          name: 'jeesite:latest'
+      type: ImageChange

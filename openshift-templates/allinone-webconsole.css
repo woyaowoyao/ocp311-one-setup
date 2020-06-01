@@ -1,0 +1,75 @@
+.icon-gogs{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/gogs.png);
+  width: 50px;
+  height: 50px;
+  background-size: 100% 100%;
+}
+.icon-sonarqube{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/sonarqube.svg);
+  width: 80px;
+  height: 50px;
+  background-size: 100% 100%;
+}
+
+.icon-nexus3{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/nexus3.png);
+  width: 60px;
+  height: 60px;
+  background-size: 100% 100%;
+}
+
+.icon-easymock{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/easymock.png);
+  width: 60px;
+  height: 60px;
+  background-size: 100% 100%;
+}
+
+.icon-kelk{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/kelk.png);
+  width: 60px;
+  height: 36px;
+  background-size: 100% 100%;
+}
+
+.icon-kafka{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/kafka.png);
+  width: 58px;
+  height: 29px;
+  background-size: 100% 100%;
+}
+
+.icon-dubbo{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/dubbo.png);
+  width: 56px;
+  height: 14px;
+  background-size: 100% 100%;
+}
+
+.icon-zalenium{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/zalenium.png);
+  width: 72px;
+  height: 31px;
+  background-size: 100% 100%;
+}
+
+.icon-apollo{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/apollo.png);
+  width: 82px;
+  height: 28px;
+  background-size: 100% 100%;
+}
+
+.icon-pxc{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/pxc.png);
+  width: 58px;
+  height: 58px;
+  background-size: 100% 100%;
+}
+
+.icon-openldap{
+  background-image: url(https://xhua-static.sh1a.qingstor.com/allinone/openldap.png);
+  width: 58px;
+  height: 58px;
+  background-size: 100% 100%;
+}

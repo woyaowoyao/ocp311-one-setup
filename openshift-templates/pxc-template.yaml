@@ -1,0 +1,321 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+labels:
+  template: pxc
+message: |-
+  数据库服务将会创建
+    proxysql服务: ${PXC_NAME}-proxy
+          用户名: ${MYSQL_PROXY_USER}
+          密码:   ${MYSQL_PROXY_PASSWORD}
+        连接方式: mysql://${PXC_NAME}-proxy:3306/
+
+        pxc服务: ${PXC_NAME}
+          用户名: root
+          密码:   ${MYSQL_ROOT_PASSWORD}
+        连接方式: mysql://${PXC_NAME}:3306/
+  在使用pqoxysql服务前，请先在pxc服务上创建数据库，并对proxysql用户授权。
+metadata:
+  annotations:
+    description: Percona XtraDB Cluster是MySQL高可用性和可扩展性的解决方案，Percona XtraDB Cluster提供的特性如下：
+
+      1.同步复制，事务要么在所有节点提交或不提交。
+
+      2.多主复制，可以在任意节点进行写操作。
+
+      3.在从服务器上并行应用事件，真正意义上的并行复制。
+
+      4.节点自动配置。
+
+      5.数据一致性，不再是异步复制。
+    iconClass: icon-pxc
+    openshift.io/display-name: Percona XtraDB Cluster
+    openshift.io/documentation-url: https://github.com/Percona-Lab/percona-openshift
+    openshift.io/long-description: PXC属于一套近乎完美的mysql高可用集群解决方案
+    openshift.io/provider-display-name: Percona, Inc.
+    openshift.io/support-url: https://www.percona.com/software/mysql-database/percona-xtradb-cluster
+    tags: database,mysql
+  name: pxc
+objects:
+- apiVersion: v1
+  stringData:
+    clustercheck: ${CLUSTERCHECK_PASSWORD}
+    monitor: ${MONITOR_PASSWORD}
+    proxysql-username: ${MYSQL_PROXY_USER}
+    proxysql-password: ${MYSQL_PROXY_PASSWORD}
+    root: ${MYSQL_ROOT_PASSWORD}
+    xtrabackup: ${XTRABACKUP_PASSWORD}
+  kind: Secret
+  metadata:
+    name: ${PXC_NAME}-mysql-passwords
+- apiVersion: v1
+  data:
+    extra.cnf: |
+      [mysqld]
+      innodb-buffer-pool-size=512M
+  kind: ConfigMap
+  metadata:
+    labels:
+      app: mysql
+    name: ${PXC_NAME}-mysql
+- apiVersion: apps/v1
+  kind: StatefulSet
+  metadata:
+    labels: 
+      app: ${PXC_NAME}
+    name: ${PXC_NAME}-proxy
+  spec:
+    podManagementPolicy: OrderedReady
+    replicas: 1
+    selector:
+      matchLabels:
+        app: ${PXC_NAME}
+        front: proxysql
+    serviceName: ${PXC_NAME}-proxy
+    template:
+      metadata:
+        labels:
+          app: ${PXC_NAME}
+          front: proxysql
+      spec:
+        containers:
+        - env:
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: root
+                name: ${PXC_NAME}-mysql-passwords
+          - name: MYSQL_PROXY_USER
+            valueFrom:
+              secretKeyRef:
+                key: proxysql-username
+                name: ${PXC_NAME}-mysql-passwords
+          - name: MYSQL_PROXY_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: proxysql-password
+                name: ${PXC_NAME}-mysql-passwords
+          - name: SERVICE
+            value: ${PXC_NAME}
+          image: perconalab/proxysql-openshift:0.5
+          imagePullPolicy: IfNotPresent
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                - /usr/bin/peer-list
+                - -on-start="/usr/bin/add_cluster_nodes.sh"
+                - -service=${PXC_NAME}
+          name: proxysql
+          ports:
+          - containerPort: 3306
+            name: mysql
+            protocol: TCP
+          - containerPort: 6032
+            name: proxyadm
+            protocol: TCP
+          volumeMounts:
+          - mountPath: /var/lib/proxysql
+            name: proxydata
+            subPath: data
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+    updateStrategy:
+      rollingUpdate:
+        partition: 0
+      type: RollingUpdate
+    volumeClaimTemplates:
+    - metadata:
+        creationTimestamp: null
+        name: proxydata
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 2Gi
+- apiVersion: apps/v1
+  kind: StatefulSet
+  metadata:
+    labels:
+      app: ${PXC_NAME}
+      sts: percona-xtradb-cluster
+    name: ${PXC_NAME}
+  spec:
+    replicas: 3
+    serviceName: ${PXC_NAME}
+    selector:
+      matchLabels:
+        app: ${PXC_NAME}
+        sts: percona-xtradb-cluster
+    template:
+      metadata:
+        labels:
+          app: ${PXC_NAME}
+          sts: percona-xtradb-cluster
+      spec:
+        containers:
+        - env:
+          - name: MYSQL_FORCE_INIT
+            value: "1"
+          - name: MYSQL_ROOT_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: root
+                name: ${PXC_NAME}-mysql-passwords
+          - name: XTRABACKUP_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: xtrabackup
+                name: ${PXC_NAME}-mysql-passwords
+          - name: MONITOR_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: monitor
+                name: ${PXC_NAME}-mysql-passwords
+          - name: CLUSTERCHECK_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: clustercheck
+                name: ${PXC_NAME}-mysql-passwords
+          image: perconalab/pxc-openshift:latest
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            exec:
+              command:
+              - /usr/bin/clustercheck.sh
+            failureThreshold: 3
+            initialDelaySeconds: 300
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 5
+          name: mysql
+          ports:
+          - containerPort: 3306
+            name: mysql
+            protocol: TCP
+          - containerPort: 4444
+            name: sst
+            protocol: TCP
+          - containerPort: 4567
+            name: replication
+            protocol: TCP
+          - containerPort: 4568
+            name: ist
+            protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+              - /usr/bin/clustercheck.sh
+            failureThreshold: 5
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 15
+          volumeMounts:
+          - mountPath: /var/lib/mysql
+            name: datadir
+            subPath: data
+          - mountPath: /etc/mysql/conf.d/
+            name: config-volume
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - configMap:
+            defaultMode: 420
+            name: ${PXC_NAME}-mysql
+            optional: true
+          name: config-volume
+    volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: ${VOLUME_CAPACITY}
+- apiVersion: v1
+  kind: Service
+  metadata:
+    annotations:
+      service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+    labels:
+      app: ${PXC_NAME}
+      sts: percona-xtradb-cluster
+    name: ${PXC_NAME}
+  spec:
+    clusterIP: None
+    ports:
+    - name: mysql-port
+      port: 3306
+    selector:
+      app: ${PXC_NAME}
+      sts: percona-xtradb-cluster
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: ${PXC_NAME}
+      front: proxysql
+    name: ${PXC_NAME}-proxy
+  spec:
+    ports:
+    - name: mysql
+      port: 3306
+    - name: proxyadm
+      port: 6032
+    selector:
+      app: ${PXC_NAME}
+      front: proxysql
+parameters:
+- description: PXC服务名
+  displayName: PXC Name
+  name: PXC_NAME
+  value: pxccluster
+  required: true
+- description: 集群监控用户密码
+  displayName: monitor password
+  name: MONITOR_PASSWORD
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+  required: true
+- description: 集群检查用户密码
+  displayName: clustercheck password
+  name: CLUSTERCHECK_PASSWORD
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+  required: true
+- description: proxysql用户名
+  displayName: mysql proxy user
+  name: MYSQL_PROXY_USER
+  from: user[A-Z0-9]{3}
+  generate: expression
+  required: true
+- description: 集群proxy用户密码
+  displayName: proxyuser password
+  name: MYSQL_PROXY_PASSWORD
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+  required: true
+- description: 集群Root用户密码
+  displayName: mysql root password
+  name: MYSQL_ROOT_PASSWORD
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+  required: true
+- description: 集群备份用户密码
+  displayName: mysql bacKup password
+  name: XTRABACKUP_PASSWORD
+  from: '[a-zA-Z0-9]{16}'
+  generate: expression
+  required: true
+- description: 集群数据库存储大小
+  displayName: mysql Volume Capacity
+  name: VOLUME_CAPACITY
+  required: true
+  value: 10Gi
