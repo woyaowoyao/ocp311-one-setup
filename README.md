@@ -28,8 +28,10 @@
 #### 2. 将一键部署脚本拷贝到主机上
 
 #### 3. cd到openshift-oneclick-allinone目录
-    
-    cd openshift-oneclick-allinone
+    # yum -y install NetworkManager git 
+# systemctl start NetworkManager;systemctl status NetworkManager;
+# git clone https://github.com/woyaowoyao/ocp311-one-setup.git
+    cd ocp311-one-setup
     
 #### 4. 运行部署(必须切到root账号)
 
